@@ -25,14 +25,6 @@ const deductFromWallet = (amount) => {
   return true;
 };
 
-// Bets structure stored in localStorage:
-// {
-//   [roundNum]: {
-//     black: amount,
-//     white: amount
-//   },
-//   ...
-// }
 const getUserBets = () => {
   const val = localStorage.getItem(BETS_KEY);
   return val ? JSON.parse(val) : {};
@@ -50,24 +42,26 @@ export default function ColorPredictor() {
   const [lastWinner, setLastWinner] = useState(null);
   const [wallet, setWallet] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [lastCheckedRound, setLastCheckedRound] = useState(null);
 
   const ROUND_DURATION = 120; // seconds
 
-  // Check for completed rounds user bet on and credit winnings if not done yet
   const checkAndCreditWinnings = (rounds) => {
     const bets = getUserBets();
     let updated = false;
 
     rounds.forEach((r) => {
-      if (r.status === 'completed' && bets[r.num]) {
-        // Check if user bet on winning color and hasn't been credited yet
-        if (r.winner && bets[r.num][r.winner] && !bets[r.num].credited) {
-          const winAmount = bets[r.num][r.winner];
+      if (r.status === 'completed' && bets[r.num] && !bets[r.num].credited) {
+        const userBet = bets[r.num];
+        const winAmount = userBet[r.winner] || 0;
+        bets[r.num].credited = true;
+        if (winAmount > 0) {
           addToWallet(winAmount);
-          bets[r.num].credited = true; // Mark as credited
-          updated = true;
-          alert(`🎉 You won ${winAmount} coins on round #${r.num}!`);
+          showPopup(`🎉 Congratulations! You won ${winAmount} coins on round #${r.num}!`);
+        } else {
+          showPopup(`😢 Better luck next time on round #${r.num}.`);
         }
+        updated = true;
       }
     });
 
@@ -77,24 +71,32 @@ export default function ColorPredictor() {
     }
   };
 
+  const showPopup = (message) => {
+    const popup = document.createElement('div');
+    popup.className = 'fixed top-10 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    popup.innerText = message;
+    document.body.appendChild(popup);
+    setTimeout(() => popup.remove(), 5000);
+  };
+
   const fetchLatestRound = async () => {
     const res = await fetch('/api/color');
     const data = await res.json();
 
-    // Active round = pending or latest
     const currentRound = data.find((r) => r.status === 'pending') || data[0];
     setRound(currentRound);
     setAllRounds(data);
 
-    // Show last winner from completed rounds (latest)
     const completedRounds = data.filter((r) => r.status === 'completed');
     if (completedRounds.length > 0) {
       setLastWinner(completedRounds[0].winner);
     }
 
-    checkAndCreditWinnings(completedRounds);
+    if (lastCheckedRound !== currentRound?.num) {
+      checkAndCreditWinnings(completedRounds);
+      setLastCheckedRound(currentRound?.num);
+    }
 
-    // Timer
     if (currentRound?.start_time) {
       const startTime = new Date(currentRound.start_time);
       const endTime = new Date(startTime.getTime() + ROUND_DURATION * 1000);
@@ -112,7 +114,6 @@ export default function ColorPredictor() {
 
     setWallet(getWalletBalance());
 
-    // Update bets in localStorage
     const bets = getUserBets();
     const roundNum = round?.num;
     if (!roundNum) return alert('No active round found');
@@ -123,10 +124,7 @@ export default function ColorPredictor() {
 
     const res = await fetch('/api/color', {
       method: 'POST',
-      body: JSON.stringify({
-        color,
-        amount: amt,
-      }),
+      body: JSON.stringify({ color, amount: amt }),
     });
 
     const data = await res.json();
@@ -161,7 +159,6 @@ export default function ColorPredictor() {
   return (
     <div className="min-h-screen bg-gradient-to-r from-black via-gray-900 to-black text-white p-6 flex flex-col items-center">
       <h1 className="text-3xl font-extrabold text-purple-400 mb-4">🎯 Color Prediction Game</h1>
-
       <div className="mb-4 text-lg text-yellow-400">💰 Wallet: {wallet} coins</div>
 
       {lastWinner && (
@@ -174,10 +171,7 @@ export default function ColorPredictor() {
         <div className="bg-gray-800 rounded-xl p-6 shadow-md w-full max-w-md mb-6">
           <p className="text-xl font-semibold mb-2">Round #{round.num}</p>
           <p className="text-sm mb-1">
-            Status:{' '}
-            <span className={round.status === 'completed' ? 'text-red-400' : 'text-green-400'}>
-              {round.status}
-            </span>
+            Status: <span className={round.status === 'completed' ? 'text-red-400' : 'text-green-400'}>{round.status}</span>
           </p>
           <p className="text-sm mb-1">Black Coins: <span className="text-white">{round.black}</span></p>
           <p className="text-sm mb-1">White Coins: <span className="text-white">{round.white}</span></p>
@@ -214,7 +208,6 @@ export default function ColorPredictor() {
         </button>
       </div>
 
-      {/* Previous Winners */}
       <div className="w-full max-w-2xl mt-6">
         <h2 className="text-xl font-bold mb-2 text-purple-400">🏁 Previous Winning Colors</h2>
         <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-3 text-center">
