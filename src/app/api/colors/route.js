@@ -14,6 +14,10 @@ export async function GET() {
     const colors = await getColors();
     return new Response(JSON.stringify(colors), { status: 200 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Failed to fetch colors' }), { status: 500 });
+    console.error('Error fetching colors:', err);
+    return new Response(JSON.stringify({ error: 'Failed to fetch colors' }), {
+      status: 500,
+    });
   }
 }
+
