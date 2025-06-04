@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import TransactionHistory from './TransactionHistory'; // adjust the path
 
 const WALLET_KEY = 'wallet_balance';
 const BETS_KEY = 'user_bets';
@@ -226,6 +227,7 @@ export default function ColorPredictor() {
             ))}
         </div>
       </div>
+      <TransactionHistory allRounds={allRounds} />
     </div>
   );
 }
