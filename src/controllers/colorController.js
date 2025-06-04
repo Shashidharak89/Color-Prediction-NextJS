@@ -1,48 +1,58 @@
 import Color from '../models/Color.js';
-import Bet from '../models/Bet.js';
 import { connectDB } from '../lib/db.js';
 
-let roundTimeout;
+const ROUND_DURATION = 2 * 60 * 1000; // 2 mins in ms
 
-export const placeBet = async (req) => {
+// Complete expired rounds by checking start_time + 2mins
+const completeExpiredRounds = async () => {
+  const expiredRounds = await Color.find({
+    status: 'pending',
+    start_time: { $lte: new Date(Date.now() - ROUND_DURATION) },
+  });
+
+  for (let round of expiredRounds) {
+    let winner;
+    if (round.black === round.white) {
+      winner = Math.random() < 0.5 ? 'black' : 'white'; // Tie-break
+    } else {
+      winner = round.black < round.white ? 'black' : 'white';
+    }
+
+    round.status = 'completed';
+    round.winner = winner;
+    await round.save();
+  }
+};
+
+export const createOrJoinRound = async (req) => {
   await connectDB();
-  const { userId, color, amount } = await req.json();
+  await completeExpiredRounds();
 
-  // Get active round or create new
-  let current = await Color.findOne({ status: 'pending' }).sort({ start_time: -1 });
+  const body = await req.json();
+  const { color, amount } = body;
 
-  if (!current) {
-    current = await Color.create({});
-    scheduleRoundEnd(current._id); // set 2 min timer
+  let round = await Color.findOne({ status: 'pending' }).sort({ num: -1 });
+
+  if (!round) {
+    const lastRound = await Color.findOne().sort({ num: -1 });
+    const newNum = lastRound ? lastRound.num + 1 : 1;
+    round = await Color.create({
+      num: newNum,
+      [color]: amount,
+      start_time: new Date(),
+    });
+  } else {
+    round[color] += amount;
+    await round.save();
   }
 
-  // Append amount
-  current[color] += amount;
-  await current.save();
-
-  // Save user bet
-  await Bet.create({ colorId: current._id, userId, color, amount });
-
-  return current;
+  return round;
 };
 
-export const getColors = async () => {
+export const getRounds = async () => {
   await connectDB();
-  return await Color.find().sort({ num: -1 });
+  await completeExpiredRounds();
+
+  const allRounds = await Color.find().sort({ num: -1 });
+  return allRounds;
 };
-
-const scheduleRoundEnd = (id) => {
-  setTimeout(async () => {
-    await connectDB();
-    const round = await Color.findById(id);
-    if (!round || round.status === 'completed') return;
-
-    // Determine winner based on lowest amount
-    const winner = round.black < round.white ? 'black' : 'white';
-
-    round.winner = winner;
-    round.status = 'completed';
-    await round.save();
-  }, 2 * 60 * 1000); // 2 minutes
-};
-

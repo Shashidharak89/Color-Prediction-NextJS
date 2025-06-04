@@ -1,12 +1,19 @@
-// app/api/color/route.js
-import { placeBet, getColors } from '@/controllers/colorController';
+import { createOrJoinRound, getRounds } from '@/controllers/colorController';
 
 export async function POST(req) {
-  const result = await placeBet(req);
-  return new Response(JSON.stringify(result), { status: 201 });
+  try {
+    const updatedRound = await createOrJoinRound(req);
+    return new Response(JSON.stringify(updatedRound), { status: 201 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Failed to bet' }), { status: 500 });
+  }
 }
 
 export async function GET() {
-  const colors = await getColors();
-  return new Response(JSON.stringify(colors), { status: 200 });
+  try {
+    const rounds = await getRounds();
+    return new Response(JSON.stringify(rounds), { status: 200 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Failed to fetch' }), { status: 500 });
+  }
 }
