@@ -58,8 +58,10 @@ export default function ColorPredictor() {
         const winAmount = userBet[r.winner] || 0;
         bets[r.num].credited = true;
         if (winAmount > 0) {
-          addToWallet(winAmount);
-          showPopup(`🎉 Congratulations! You won ${winAmount} coins on round #${r.num}!`);
+          // Double the bet amount (original bet + win amount)
+          const totalPayout = winAmount * 2;
+          addToWallet(totalPayout);
+          showPopup(`🎉 Congratulations! You won ${totalPayout} coins on round #${r.num}!`);
         } else {
           showPopup(`😢 Better luck next time on round #${r.num}.`);
         }
@@ -113,6 +115,14 @@ export default function ColorPredictor() {
     }
   };
 
+  const checkWinnings = async () => {
+    const res = await fetch('/api/color');
+    const data = await res.json();
+    
+    const completedRounds = data.filter((r) => r.status === 'completed');
+    checkAndCreditWinnings(completedRounds);
+  };
+
   const handlePlaceBet = async () => {
     const amt = parseInt(amount);
     if (!amt || amt <= 0 || isNaN(amt)) return alert('Enter a valid amount');
@@ -149,6 +159,12 @@ export default function ColorPredictor() {
     fetchLatestRound();
     const interval = setInterval(fetchLatestRound, 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  // New useEffect to check winnings every 3 seconds
+  useEffect(() => {
+    const winCheckInterval = setInterval(checkWinnings, 3000);
+    return () => clearInterval(winCheckInterval);
   }, []);
 
   useEffect(() => {
